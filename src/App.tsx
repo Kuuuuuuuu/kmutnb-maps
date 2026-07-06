@@ -75,7 +75,7 @@ export function App() {
             <h1>Campus Navigator</h1>
           </div>
         </div>
-        <div className={`signal ${userLocation.status}`}>
+        <div className={`signal ${userLocation.status}`} style="display: 'none'">
           <LocateFixed aria-hidden="true" size={15} />
           <span>{userLocation.position ? 'Live' : userLocation.status === 'denied' ? 'Off' : 'Ready'}</span>
         </div>
