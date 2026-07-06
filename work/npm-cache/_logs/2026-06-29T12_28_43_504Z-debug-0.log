@@ -1,0 +1,63 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.11.0
+2 info using node@v24.14.1
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\Natsu\Documents\Codex\2026-06-29\build-a-google-maps-style-campus\.npmrc
+5 silly config load:file:C:\Users\Natsu\.npmrc
+6 silly config load:file:C:\Users\Natsu\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm audit
+8 verbose argv "audit" "--omit" "dev" "--cache" ".\\work\\npm-cache"
+9 verbose logfile logs-max:10 dir:C:\Users\Natsu\Documents\Codex\2026-06-29\build-a-google-maps-style-campus\work\npm-cache\_logs\2026-06-29T12_28_43_504Z-
+10 verbose logfile C:\Users\Natsu\Documents\Codex\2026-06-29\build-a-google-maps-style-campus\work\npm-cache\_logs\2026-06-29T12_28_43_504Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly audit bulk request {
+13 silly audit   '@mapbox/geojson-rewind': [ '0.5.2' ],
+13 silly audit   '@mapbox/jsonlint-lines-primitives': [ '2.0.3' ],
+13 silly audit   '@mapbox/point-geometry': [ '0.1.0' ],
+13 silly audit   '@mapbox/tiny-sdf': [ '2.2.0' ],
+13 silly audit   '@mapbox/unitbezier': [ '0.0.1' ],
+13 silly audit   '@mapbox/vector-tile': [ '1.3.1' ],
+13 silly audit   '@mapbox/whoots-js': [ '3.1.0' ],
+13 silly audit   '@maplibre/maplibre-gl-style-spec': [ '20.4.0' ],
+13 silly audit   quickselect: [ '2.0.0', '3.0.0' ],
+13 silly audit   '@types/geojson': [ '7946.0.16' ],
+13 silly audit   '@types/geojson-vt': [ '3.2.5' ],
+13 silly audit   '@types/mapbox__point-geometry': [ '0.1.4' ],
+13 silly audit   '@types/mapbox__vector-tile': [ '1.3.4' ],
+13 silly audit   '@types/pbf': [ '3.0.5' ],
+13 silly audit   '@types/supercluster': [ '7.1.3' ],
+13 silly audit   earcut: [ '3.1.0' ],
+13 silly audit   'geojson-vt': [ '4.0.3' ],
+13 silly audit   'get-stream': [ '6.0.1' ],
+13 silly audit   'gl-matrix': [ '3.4.4' ],
+13 silly audit   'global-prefix': [ '4.0.0' ],
+13 silly audit   ieee754: [ '1.2.1' ],
+13 silly audit   ini: [ '4.1.3' ],
+13 silly audit   isexe: [ '3.1.5' ],
+13 silly audit   'json-stringify-pretty-compact': [ '4.0.0' ],
+13 silly audit   kdbush: [ '4.1.0' ],
+13 silly audit   'kind-of': [ '6.0.3' ],
+13 silly audit   'lucide-preact': [ '0.468.0' ],
+13 silly audit   'maplibre-gl': [ '4.7.1' ],
+13 silly audit   minimist: [ '1.2.8' ],
+13 silly audit   'murmurhash-js': [ '1.0.0' ],
+13 silly audit   pbf: [ '3.3.0' ],
+13 silly audit   potpack: [ '2.1.0' ],
+13 silly audit   preact: [ '10.29.3' ],
+13 silly audit   'protocol-buffers-schema': [ '3.6.1' ],
+13 silly audit   'resolve-protobuf-schema': [ '2.1.0' ],
+13 silly audit   rw: [ '1.3.3' ],
+13 silly audit   supercluster: [ '8.0.1' ],
+13 silly audit   tinyqueue: [ '3.0.0' ],
+13 silly audit   'vt-pbf': [ '3.1.3' ],
+13 silly audit   which: [ '4.0.0' ]
+13 silly audit }
+14 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 611ms
+15 silly audit report {}
+16 verbose cwd C:\Users\Natsu\Documents\Codex\2026-06-29\build-a-google-maps-style-campus
+17 verbose os Windows_NT 10.0.26200
+18 verbose node v24.14.1
+19 verbose npm  v11.11.0
+20 verbose exit 0
+21 info ok
