@@ -49,7 +49,7 @@ export function BuildingSheet({
             ? `${building.properties.levels} levels`
             : "Footprint mapped"}
         </span>
-        <span>OSM #{building.properties.osm_id}</span>
+        <span>#{building.properties.osm_id}</span>
       </div>
 
       {routeSummary && (

@@ -67,7 +67,7 @@ export function App() {
         onSelectBuilding={handleSelect}
       />
 
-      <section className="top-bar" aria-label="Campus navigator">
+      <section className="top-bar" aria-label="Campus navigator" style="display: 'none'">
         <div className="brand-lockup">
           <MapPinned aria-hidden="true" size={21} />
           <div>
