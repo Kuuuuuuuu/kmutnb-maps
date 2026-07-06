@@ -1,5 +1,6 @@
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef } from "preact/hooks";
+import { LocateFixed, Minus, Plus, Navigation } from "lucide-preact";
 import { CAMPUS_BOUNDS, CAMPUS_CENTER, polygonBounds } from "../lib/geo";
 import type { BuildingCollection, BuildingFeature, LngLat } from "../types/geo";
 import type { Feature, LineString, Polygon } from "geojson";
@@ -100,13 +101,6 @@ export function MapView({
 
     map.addControl(
       new maplibregl.AttributionControl({ compact: true }),
-      "bottom-right",
-    );
-    map.addControl(
-      new maplibregl.NavigationControl({
-        visualizePitch: true,
-        showCompass: true,
-      }),
       "bottom-right",
     );
 
@@ -329,12 +323,75 @@ export function MapView({
     }
   }, [selected]);
 
+  function centerMap() {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    if (userLocation) {
+      map.easeTo({
+        center: userLocation,
+        zoom: Math.max(map.getZoom(), 18),
+        duration: 450,
+      });
+      return;
+    }
+
+    map.fitBounds(CAMPUS_BOUNDS, {
+      padding: 72,
+      duration: 450,
+      pitch: 38,
+      bearing: -18,
+    });
+  }
+
+  function resetView() {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    map.easeTo({
+      center: selected ? polygonBounds(selected)[0] : CAMPUS_CENTER,
+      zoom: selected ? Math.max(map.getZoom(), 18) : 17,
+      bearing: -18,
+      pitch: 38,
+      duration: 450,
+    });
+  }
+
   return (
-    <div
-      className="map-canvas"
-      ref={mapNode}
-      aria-label="Map of KMUTNB campus"
-    />
+    <div className="map-shell">
+      <div
+        className="map-canvas"
+        ref={mapNode}
+        aria-label="Map of KMUTNB campus"
+      />
+
+      <div className="map-hud" aria-label="Map controls">
+        <button
+          className="map-hud-button primary"
+          type="button"
+          onClick={centerMap}
+          aria-label="Center map on current location"
+        >
+          <LocateFixed aria-hidden="true" size={18} />
+        </button>
+        <button
+          className="map-hud-button"
+          type="button"
+          onClick={resetView}
+          aria-label="Reset map orientation"
+        >
+          <Navigation
+            aria-hidden="true"
+            size={18}
+            className="map-hud-compass"
+          />
+        </button>
+      </div>
+    </div>
   );
 }
 

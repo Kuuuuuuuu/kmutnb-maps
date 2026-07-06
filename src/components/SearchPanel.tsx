@@ -57,7 +57,7 @@ export function SearchPanel({
           value={query}
           onInput={(event) => setQuery(event.currentTarget.value)}
           onFocus={() => setIsFocused(true)}
-          placeholder="Search KMUTNB"
+          placeholder="Search"
           aria-label="Search buildings"
         />
         <button
