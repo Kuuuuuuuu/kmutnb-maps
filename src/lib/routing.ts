@@ -15,6 +15,7 @@ export async function getRoute(
 ): Promise<RouteResult> {
   let lastError: unknown;
 
+  // TODO: FIX IT TO START FROM ONLY MAIN ENTRANCE of university
   for (const profile of profiles) {
     try {
       const url = new URL(

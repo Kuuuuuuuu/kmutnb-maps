@@ -2,6 +2,7 @@ import type { CampusPlace } from "../types/geo";
 
 export const campusPlaces: CampusPlace[] = [
   // TODO: SERVER SIDE
+  // mock data for now
   {
     id: "room-401",
     category: "room",

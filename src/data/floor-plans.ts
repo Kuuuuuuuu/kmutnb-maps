@@ -17,6 +17,7 @@ export type FloorPlan = {
 
 export const floorPlans: Record<string, Record<number, FloorPlan>> = {
   // DO LATER PROBABLY WILL FIND BETTER SOLUTION THAN THIS
+  // TODO: ALSO MOVE TO SERVER SIDE
   // "158474996": {
   //   1: {
   //     rooms: [
