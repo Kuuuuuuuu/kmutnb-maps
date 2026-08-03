@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useState } from "react";
 import type { LngLat } from "../types/geo";
 
 type LocationState = {

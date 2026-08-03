@@ -22,7 +22,7 @@ export async function getRoute(
       );
       url.searchParams.set("overview", "full");
       url.searchParams.set("geometries", "geojson");
-      url.searchParams.set("steps", "false");
+      url.searchParams.set("steps", "true");
 
       const response = await fetch(url);
       const payload = await response.json();
@@ -32,6 +32,24 @@ export async function getRoute(
       }
 
       const selected = payload.routes[0];
+      const steps = (selected.legs || []).flatMap(
+        (leg: {
+          steps?: Array<{
+            distance?: number;
+            duration?: number;
+            name?: string;
+            maneuver?: { type?: string; modifier?: string };
+          }>;
+        }) =>
+          (leg.steps || []).map((step) => ({
+            distanceMeters: step.distance || 0,
+            durationSeconds: step.duration || 0,
+            name: step.name || "",
+            type: step.maneuver?.type || "continue",
+            modifier: step.maneuver?.modifier,
+          })),
+      );
+
       return {
         route: {
           type: "Feature",
@@ -43,6 +61,7 @@ export async function getRoute(
           durationSeconds: selected.duration,
           profile,
           originLabel,
+          steps,
         },
       };
     } catch (error) {

@@ -1,9 +1,9 @@
-import type { BuildingFeature, LngLat } from '../types/geo';
+import type { BuildingFeature, LngLat, RouteStep } from "../types/geo";
 
 export const CAMPUS_CENTER: LngLat = [100.5131602, 13.8218432];
 export const CAMPUS_BOUNDS: [[number, number], [number, number]] = [
   [100.5109605, 13.8187094],
-  [100.5170581, 13.8248100],
+  [100.5170581, 13.82481],
 ];
 export const MAIN_GATE: LngLat = [100.51372, 13.81886];
 
@@ -21,7 +21,9 @@ export function polygonCenter(feature: BuildingFeature): LngLat {
   return [totals.lng / ring.length, totals.lat / ring.length];
 }
 
-export function polygonBounds(feature: BuildingFeature): [[number, number], [number, number]] {
+export function polygonBounds(
+  feature: BuildingFeature,
+): [[number, number], [number, number]] {
   const ring = feature.geometry.coordinates[0];
   const lngs = ring.map((coord) => coord[0]);
   const lats = ring.map((coord) => coord[1]);
@@ -46,5 +48,38 @@ export function formatDuration(seconds: number): string {
 }
 
 export function compactBuildingName(feature: BuildingFeature): string {
-  return feature.properties.name_en || feature.properties.name || feature.properties.name_th || 'Campus building';
+  return (
+    feature.properties.name_en ||
+    feature.properties.name ||
+    feature.properties.name_th ||
+    "Campus building"
+  );
+}
+
+export function formatRouteInstruction(step?: RouteStep): string {
+  if (!step || step.type === "depart") {
+    return step?.name
+      ? `Head toward ${step.name}`
+      : "Follow the highlighted route";
+  }
+
+  if (step.type === "arrive") {
+    return "Arrive at your destination";
+  }
+
+  const modifier = step.modifier?.replaceAll("-", " ");
+  const action =
+    step.type === "turn"
+      ? "Turn"
+      : step.type === "merge"
+        ? "Merge"
+        : step.type === "fork"
+          ? "Keep"
+          : step.type === "roundabout"
+            ? "Take the roundabout"
+            : "Continue";
+  const direction = modifier ? ` ${modifier}` : "";
+  const road = step.name ? ` onto ${step.name}` : "";
+
+  return `${action}${direction}${road}`;
 }

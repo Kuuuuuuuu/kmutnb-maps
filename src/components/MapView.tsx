@@ -1,17 +1,35 @@
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef } from "preact/hooks";
-import { LocateFixed, Minus, Plus, Navigation } from "lucide-preact";
+import { useEffect, useRef } from "react";
+import { LocateFixed, Navigation } from "lucide-react";
 import { CAMPUS_BOUNDS, CAMPUS_CENTER, polygonBounds } from "../lib/geo";
-import type { BuildingCollection, BuildingFeature, LngLat } from "../types/geo";
-import type { Feature, LineString, Polygon } from "geojson";
+import { localizedPlaceName, t } from "../lib/i18n";
+import type {
+  BuildingCollection,
+  BuildingFeature,
+  CampusPlace,
+  Language,
+  LngLat,
+} from "../types/geo";
+import type {
+  Feature,
+  FeatureCollection,
+  LineString,
+  Point,
+  Polygon,
+} from "geojson";
 
 type MapViewProps = {
   buildings: BuildingCollection;
   selected: BuildingFeature | null;
+  selectedPlace: CampusPlace | null;
   route: Feature<LineString> | null;
+  places: CampusPlace[];
+  language: Language;
+  colorBlindMode: boolean;
   userLocation: LngLat | null;
   accuracy: number | null;
   onSelectBuilding: (building: BuildingFeature) => void;
+  onSelectPlace: (place: CampusPlace) => void;
 };
 
 const emptyRoute: Feature<LineString> = {
@@ -67,18 +85,27 @@ const campusPanBounds: [[number, number], [number, number]] = [
 export function MapView({
   buildings,
   selected,
+  selectedPlace,
   route,
+  places,
+  language,
+  colorBlindMode,
   userLocation,
   accuracy,
   onSelectBuilding,
+  onSelectPlace,
 }: MapViewProps) {
   const mapNode = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const buildingsRef = useRef(buildings);
+  const placesRef = useRef(places);
   const onSelectRef = useRef(onSelectBuilding);
+  const onSelectPlaceRef = useRef(onSelectPlace);
 
   buildingsRef.current = buildings;
+  placesRef.current = places;
   onSelectRef.current = onSelectBuilding;
+  onSelectPlaceRef.current = onSelectPlace;
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) {
@@ -93,8 +120,8 @@ export function MapView({
       minZoom: 16.2,
       maxZoom: 20.5,
       maxBounds: campusPanBounds,
-      pitch: 38,
-      bearing: -18,
+      pitch: 0,
+      bearing: 0,
       attributionControl: false,
       renderWorldCopies: false,
     });
@@ -108,8 +135,8 @@ export function MapView({
       map.fitBounds(CAMPUS_BOUNDS, {
         padding: 72,
         duration: 0,
-        pitch: 38,
-        bearing: -18,
+        pitch: 0,
+        bearing: 0,
       });
 
       map.addSource("campus-mask", {
@@ -122,8 +149,8 @@ export function MapView({
         type: "fill",
         source: "campus-mask",
         paint: {
-          "fill-color": "#6d6d6d",
-          "fill-opacity": 0.9,
+          "fill-color": "#aeb8af",
+          "fill-opacity": 0.68,
         },
       });
 
@@ -137,9 +164,9 @@ export function MapView({
         type: "line",
         source: "campus-frame",
         paint: {
-          "line-color": "#236d5b",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 16, 2, 20, 5],
-          "line-opacity": 0.85,
+          "line-color": "#2b6655",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 16, 1.5, 20, 3],
+          "line-opacity": 0.64,
         },
       });
 
@@ -153,8 +180,8 @@ export function MapView({
         type: "fill",
         source: "campus-buildings",
         paint: {
-          "fill-color": "#236d5b",
-          "fill-opacity": 0.42,
+          "fill-color": buildingColorExpression(colorBlindMode),
+          "fill-opacity": 0.46,
         },
       });
 
@@ -163,9 +190,9 @@ export function MapView({
         type: "line",
         source: "campus-buildings",
         paint: {
-          "line-color": "#114338",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 16, 1, 20, 3],
-          "line-opacity": 0.78,
+          "line-color": buildingLineColorExpression(colorBlindMode),
+          "line-width": ["interpolate", ["linear"], ["zoom"], 16, 1, 20, 2.5],
+          "line-opacity": 0.76,
         },
       });
 
@@ -175,8 +202,68 @@ export function MapView({
         source: "campus-buildings",
         filter: ["==", ["get", "osm_id"], -1],
         paint: {
-          "fill-color": "#e04f2f",
-          "fill-opacity": 0.76,
+          "fill-color": "#d9583d",
+          "fill-opacity": 0.82,
+        },
+      });
+
+      map.addLayer({
+        id: "campus-building-selected-outline",
+        type: "line",
+        source: "campus-buildings",
+        filter: ["==", ["get", "osm_id"], -1],
+        paint: {
+          "line-color": "#a83e2b",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 16, 2, 20, 4],
+          "line-opacity": 0.96,
+        },
+      });
+
+      map.addSource("campus-places", {
+        type: "geojson",
+        data: placesFeatureCollection(placesRef.current, language),
+      });
+
+      map.addLayer({
+        id: "campus-place-dot",
+        type: "circle",
+        source: "campus-places",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 16, 5, 20, 9],
+          "circle-color": placeColorExpression(colorBlindMode),
+          "circle-stroke-color": "#f7f5ef",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      map.addLayer({
+        id: "campus-place-selected",
+        type: "circle",
+        source: "campus-places",
+        filter: ["==", ["get", "id"], "__none__"],
+        paint: {
+          "circle-radius": 12,
+          "circle-color": "#d9583d",
+          "circle-stroke-color": "#fff8eb",
+          "circle-stroke-width": 3,
+        },
+      });
+
+      map.addLayer({
+        id: "campus-place-labels",
+        type: "symbol",
+        source: "campus-places",
+        layout: {
+          "text-field": ["get", "shortLabel"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 16, 9, 20, 12],
+          "text-offset": [0, 1.35],
+          "text-anchor": "top",
+          "text-font": ["Open Sans Bold"],
+        },
+        paint: {
+          "text-color": "#17231c",
+          "text-halo-color": "#f7f5ef",
+          "text-halo-width": 1.5,
         },
       });
 
@@ -194,9 +281,9 @@ export function MapView({
           "line-join": "round",
         },
         paint: {
-          "line-color": "#fff7e0",
+          "line-color": "#f7f5ef",
           "line-width": ["interpolate", ["linear"], ["zoom"], 15, 8, 20, 16],
-          "line-opacity": 0.92,
+          "line-opacity": 0.96,
         },
       });
 
@@ -209,7 +296,7 @@ export function MapView({
           "line-join": "round",
         },
         paint: {
-          "line-color": "#1d73d4",
+          "line-color": "#2f76c7",
           "line-width": ["interpolate", ["linear"], ["zoom"], 15, 4, 20, 8],
         },
       });
@@ -239,8 +326,8 @@ export function MapView({
         source: "user-location",
         paint: {
           "circle-radius": 7,
-          "circle-color": "#1d73d4",
-          "circle-stroke-color": "#ffffff",
+          "circle-color": "#2f76c7",
+          "circle-stroke-color": "#f7f5ef",
           "circle-stroke-width": 3,
         },
       });
@@ -269,6 +356,23 @@ export function MapView({
       map.getCanvas().style.cursor = "";
     });
 
+    map.on("click", "campus-place-dot", (event) => {
+      const feature = event.features?.[0];
+      const placeId = feature?.properties?.id;
+      const match = placesRef.current.find((place) => place.id === placeId);
+      if (match) {
+        onSelectPlaceRef.current(match);
+      }
+    });
+
+    map.on("mouseenter", "campus-place-dot", () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+
+    map.on("mouseleave", "campus-place-dot", () => {
+      map.getCanvas().style.cursor = "";
+    });
+
     mapRef.current = map;
 
     return () => {
@@ -287,7 +391,64 @@ export function MapView({
       | maplibregl.GeoJSONSource
       | undefined;
     source?.setData(route || emptyRoute);
+
+    const coordinates = route?.geometry.coordinates;
+    if (!coordinates || coordinates.length < 2) {
+      return;
+    }
+
+    const bounds = coordinates.reduce(
+      (currentBounds, coordinate) =>
+        currentBounds.extend(coordinate as [number, number]),
+      new maplibregl.LngLatBounds(
+        coordinates[0] as [number, number],
+        coordinates[0] as [number, number],
+      ),
+    );
+
+    map.fitBounds(bounds, {
+      padding: { top: 188, right: 58, bottom: 238, left: 58 },
+      duration: 620,
+      maxZoom: 18.6,
+      pitch: 0,
+      bearing: 0,
+    });
   }, [route]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    const source = map.getSource("campus-places") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    source?.setData(placesFeatureCollection(places, language));
+  }, [places, language]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    map.setPaintProperty(
+      "campus-place-dot",
+      "circle-color",
+      placeColorExpression(colorBlindMode),
+    );
+    map.setPaintProperty(
+      "campus-building-fill",
+      "fill-color",
+      buildingColorExpression(colorBlindMode),
+    );
+    map.setPaintProperty(
+      "campus-building-line",
+      "line-color",
+      buildingLineColorExpression(colorBlindMode),
+    );
+  }, [colorBlindMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -307,21 +468,45 @@ export function MapView({
       return;
     }
 
-    map.setFilter("campus-building-selected", [
+    const selectedFilter = [
       "==",
       ["get", "osm_id"],
       selected?.properties.osm_id ?? -1,
-    ]);
+    ] as maplibregl.FilterSpecification;
+
+    map.setFilter("campus-building-selected", selectedFilter);
+    map.setFilter("campus-building-selected-outline", selectedFilter);
 
     if (selected) {
       map.fitBounds(polygonBounds(selected), {
         padding: { top: 118, right: 42, bottom: 260, left: 42 },
         duration: 680,
-        pitch: 46,
-        bearing: -18,
+        pitch: 0,
+        bearing: 0,
       });
     }
   }, [selected]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    map.setFilter("campus-place-selected", [
+      "==",
+      ["get", "id"],
+      selectedPlace?.id ?? "__none__",
+    ]);
+
+    if (selectedPlace) {
+      map.easeTo({
+        center: selectedPlace.coordinates,
+        zoom: Math.max(map.getZoom(), 18),
+        duration: 500,
+      });
+    }
+  }, [selectedPlace]);
 
   function centerMap() {
     const map = mapRef.current;
@@ -341,8 +526,8 @@ export function MapView({
     map.fitBounds(CAMPUS_BOUNDS, {
       padding: 72,
       duration: 450,
-      pitch: 38,
-      bearing: -18,
+      pitch: 0,
+      bearing: 0,
     });
   }
 
@@ -355,44 +540,120 @@ export function MapView({
     map.easeTo({
       center: selected ? polygonBounds(selected)[0] : CAMPUS_CENTER,
       zoom: selected ? Math.max(map.getZoom(), 18) : 17,
-      bearing: -18,
-      pitch: 38,
+      bearing: 0,
+      pitch: 0,
       duration: 450,
     });
   }
 
   return (
-    <div className="map-shell">
+    <div className="absolute inset-0">
       <div
-        className="map-canvas"
+        className="absolute inset-0"
         ref={mapNode}
-        aria-label="Map of KMUTNB campus"
+        aria-label={t(language, "campusMap")}
       />
 
-      <div className="map-hud" aria-label="Map controls">
+      <div
+        className="absolute right-3 top-[5.25rem] z-10 flex flex-col overflow-hidden rounded-full border border-ink/10 bg-paper shadow-soft md:right-6 md:top-[5.4rem]"
+        aria-label={t(language, "mapControls")}
+      >
         <button
-          className="map-hud-button primary"
+          className="grid size-10 place-items-center rounded-none border-0 border-b border-ink/10 bg-transparent text-ink transition hover:bg-ink/[0.05] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fern/60 active:scale-95"
           type="button"
           onClick={centerMap}
-          aria-label="Center map on current location"
+          aria-label={t(language, "centerMap")}
         >
           <LocateFixed aria-hidden="true" size={18} />
         </button>
         <button
-          className="map-hud-button"
+          className="grid size-10 place-items-center rounded-none border-0 bg-transparent text-ink transition hover:bg-ink/[0.05] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fern/60 active:scale-95"
           type="button"
           onClick={resetView}
-          aria-label="Reset map orientation"
+          aria-label={t(language, "resetMap")}
         >
           <Navigation
             aria-hidden="true"
             size={18}
-            className="map-hud-compass"
+            className="-rotate-[16deg]"
           />
         </button>
       </div>
     </div>
   );
+}
+
+type PlaceProperties = {
+  id: string;
+  category: CampusPlace["category"];
+  label: string;
+  shortLabel: string;
+};
+
+function placesFeatureCollection(
+  places: CampusPlace[],
+  language: Language,
+): FeatureCollection<Point, PlaceProperties> {
+  return {
+    type: "FeatureCollection",
+    features: places.map((place) => ({
+      type: "Feature",
+      properties: {
+        id: place.id,
+        category: place.category,
+        label: localizedPlaceName(place, language),
+        shortLabel: place.shortLabel,
+      },
+      geometry: {
+        type: "Point",
+        coordinates: place.coordinates,
+      },
+    })),
+  };
+}
+
+function placeColorExpression(colorBlindMode: boolean) {
+  return [
+    "match",
+    ["get", "category"],
+    "event",
+    colorBlindMode ? "#d55e00" : "#d9583d",
+    "facility",
+    colorBlindMode ? "#0072b2" : "#2f76c7",
+    colorBlindMode ? "#009e73" : "#397969",
+  ] as maplibregl.ExpressionSpecification;
+}
+
+function buildingColorExpression(colorBlindMode: boolean) {
+  return [
+    "match",
+    ["get", "building"],
+    "university",
+    colorBlindMode ? "#0072b2" : "#397969",
+    "school",
+    colorBlindMode ? "#e69f00" : "#4c75a3",
+    "dormitory",
+    colorBlindMode ? "#cc79a7" : "#bd7b48",
+    "yes",
+    colorBlindMode ? "#009e73" : "#8a729b",
+    colorBlindMode ? "#5d5d5d" : "#70877d",
+  ] as maplibregl.ExpressionSpecification;
+}
+
+function buildingLineColorExpression(colorBlindMode: boolean) {
+  return [
+    "match",
+    ["get", "building"],
+    "university",
+    colorBlindMode ? "#004b76" : "#20483c",
+    "school",
+    colorBlindMode ? "#9a6400" : "#35576f",
+    "dormitory",
+    colorBlindMode ? "#7f315f" : "#704522",
+    "yes",
+    colorBlindMode ? "#006b4f" : "#5a4669",
+    colorBlindMode ? "#333333" : "#42554b",
+  ] as maplibregl.ExpressionSpecification;
 }
 
 function userLocationFeature(position: LngLat | null, accuracy: number | null) {
