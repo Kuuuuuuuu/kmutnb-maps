@@ -51,7 +51,7 @@ export function IssueReportDialog({
     reader.readAsDataURL(file);
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit({ subject, category, details, photoName, photoData });
   }
