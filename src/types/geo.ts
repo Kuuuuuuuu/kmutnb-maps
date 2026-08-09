@@ -2,6 +2,11 @@ import type { Feature, FeatureCollection, Geometry, Polygon } from "geojson";
 
 export type LngLat = [number, number];
 export type Language = "en" | "th";
+export type NavigationPhase =
+  | "active"
+  | "recalculating"
+  | "off-route"
+  | "arrived";
 
 export type PlaceCategory = "facility" | "amenity" | "event" | "room";
 
@@ -44,6 +49,7 @@ export type RouteStep = {
   name: string;
   type: string;
   modifier?: string;
+  startDistanceMeters?: number;
 };
 
 export type RouteSummary = {

@@ -1,7 +1,7 @@
 import { Camera, ImagePlus, Send, X } from "lucide-react";
-import { motion } from "framer-motion";
 import { useState } from "react";
 import { localizedBuildingName, localizedPlaceName, t } from "../lib/i18n";
+import { useGsapEntrance } from "../lib/gsap";
 import type { BuildingFeature, CampusPlace, Language } from "../types/geo";
 
 export type IssueReport = {
@@ -37,6 +37,8 @@ export function IssueReportDialog({
     : place
       ? localizedPlaceName(place, language)
       : t(language, "campusMap");
+  const backdropRef = useGsapEntrance<HTMLDivElement>("modalBackdrop");
+  const formRef = useGsapEntrance<HTMLFormElement>("modal");
 
   function handlePhoto(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -57,18 +59,15 @@ export function IssueReportDialog({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+    <div
+      ref={backdropRef}
       className="absolute inset-0 z-[65] grid place-items-center bg-ink/45 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={t(language, "issueTitle")}
     >
-      <motion.form
-        initial={{ opacity: 0, y: 18, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
+      <form
+        ref={formRef}
         onSubmit={submit}
         className="max-h-[calc(100vh-2rem)] w-full max-w-[28rem] overflow-auto rounded-[1.2rem] border border-ink/10 bg-paper p-5 shadow-float md:p-6"
       >
@@ -165,7 +164,7 @@ export function IssueReportDialog({
           <Send aria-hidden="true" size={16} />
           {t(language, "issueSubmit")}
         </button>
-      </motion.form>
-    </motion.div>
+      </form>
+    </div>
   );
 }

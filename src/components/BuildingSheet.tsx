@@ -1,9 +1,9 @@
 import { AlertTriangle, Loader2, Navigation, Ruler, X } from "lucide-react";
-import { motion } from "framer-motion";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { localizedBuildingName, t } from "../lib/i18n";
 import { formatDistance } from "../lib/geo";
 import { getFloorPlan, type FloorPlan } from "../data/floor-plans";
+import { useGsapEntrance, useGsapSpin } from "../lib/gsap";
 import type { BuildingFeature, Language, RouteSummary } from "../types/geo";
 
 type BuildingSheetProps = {
@@ -34,14 +34,18 @@ export function BuildingSheet({
     20,
   );
   const [selectedFloor, setSelectedFloor] = useState(1);
+  const sheetRef = useGsapEntrance<HTMLElement>("sheetUp");
+  const routeSummaryRef = useGsapEntrance<HTMLDivElement>(
+    "fadeDown",
+    Boolean(routeSummary),
+  );
+  const loadingIconRef = useGsapSpin<HTMLSpanElement>(
+    routeStatus === "loading" && !isRouting,
+  );
 
   return (
-    <motion.aside
-      layout
-      initial={{ opacity: 0, y: 22, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 18, scale: 0.98 }}
-      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+    <aside
+      ref={sheetRef}
       className="absolute bottom-[max(0.625rem,env(safe-area-inset-bottom))] left-2.5 right-2.5 z-40 max-h-[78vh] overflow-auto rounded-[1.15rem] border border-ink/10 bg-paper p-4 shadow-float md:bottom-6 md:left-auto md:right-6 md:w-[min(25rem,calc(100vw-3rem))] md:max-h-[calc(100vh-2.75rem)] md:p-[1.125rem]"
       aria-label={t(language, "building")}
     >
@@ -94,9 +98,8 @@ export function BuildingSheet({
       )}
 
       {routeSummary && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+        <div
+          ref={routeSummaryRef}
           className="mt-3 flex items-center gap-3 rounded-xl bg-mapblue/[0.08] p-3 text-[#144f95]"
         >
           <Navigation aria-hidden="true" size={17} className="rotate-45" />
@@ -110,7 +113,7 @@ export function BuildingSheet({
               {t(language, "from")} {routeSummary.originLabel}
             </span>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {routeStatus === "error" && (
@@ -129,7 +132,9 @@ export function BuildingSheet({
           {isRouting ? (
             <X aria-hidden="true" size={17} />
           ) : routeStatus === "loading" ? (
-            <Loader2 className="animate-spin" aria-hidden="true" size={17} />
+            <span ref={loadingIconRef} className="inline-grid">
+              <Loader2 aria-hidden="true" size={17} />
+            </span>
           ) : (
             <Navigation aria-hidden="true" size={17} />
           )}
@@ -151,7 +156,7 @@ export function BuildingSheet({
           <AlertTriangle aria-hidden="true" size={18} />
         </button>
       </div>
-    </motion.aside>
+    </aside>
   );
 }
 

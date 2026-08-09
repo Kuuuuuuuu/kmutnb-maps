@@ -1,5 +1,5 @@
 import maplibregl, { type Map as MapLibreMap } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LocateFixed, Navigation } from "lucide-react";
 import { CAMPUS_BOUNDS, CAMPUS_CENTER, polygonBounds } from "../lib/geo";
 import { localizedPlaceName, t } from "../lib/i18n";
@@ -28,6 +28,7 @@ type MapViewProps = {
   colorBlindMode: boolean;
   userLocation: LngLat | null;
   accuracy: number | null;
+  navigationActive: boolean;
   onSelectBuilding: (building: BuildingFeature) => void;
   onSelectPlace: (place: CampusPlace) => void;
 };
@@ -92,6 +93,7 @@ export function MapView({
   colorBlindMode,
   userLocation,
   accuracy,
+  navigationActive,
   onSelectBuilding,
   onSelectPlace,
 }: MapViewProps) {
@@ -101,11 +103,15 @@ export function MapView({
   const placesRef = useRef(places);
   const onSelectRef = useRef(onSelectBuilding);
   const onSelectPlaceRef = useRef(onSelectPlace);
+  const navigationActiveRef = useRef(navigationActive);
+  const followLocationRef = useRef(true);
+  const [isFollowingLocation, setIsFollowingLocation] = useState(true);
 
   buildingsRef.current = buildings;
   placesRef.current = places;
   onSelectRef.current = onSelectBuilding;
   onSelectPlaceRef.current = onSelectPlace;
+  navigationActiveRef.current = navigationActive;
 
   useEffect(() => {
     if (!mapNode.current || mapRef.current) {
@@ -130,6 +136,15 @@ export function MapView({
       new maplibregl.AttributionControl({ compact: true }),
       "bottom-right",
     );
+
+    map.on("dragstart", () => {
+      if (!navigationActiveRef.current) {
+        return;
+      }
+
+      followLocationRef.current = false;
+      setIsFollowingLocation(false);
+    });
 
     map.on("load", () => {
       map.fitBounds(CAMPUS_BOUNDS, {
@@ -382,6 +397,17 @@ export function MapView({
   }, []);
 
   useEffect(() => {
+    if (!navigationActive) {
+      followLocationRef.current = false;
+      setIsFollowingLocation(false);
+      return;
+    }
+
+    followLocationRef.current = true;
+    setIsFollowingLocation(true);
+  }, [navigationActive]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) {
       return;
@@ -391,6 +417,10 @@ export function MapView({
       | maplibregl.GeoJSONSource
       | undefined;
     source?.setData(route || emptyRoute);
+
+    if (navigationActive && userLocation) {
+      return;
+    }
 
     const coordinates = route?.geometry.coordinates;
     if (!coordinates || coordinates.length < 2) {
@@ -408,12 +438,12 @@ export function MapView({
 
     map.fitBounds(bounds, {
       padding: { top: 188, right: 58, bottom: 238, left: 58 },
-      duration: 620,
+      duration: navigationActive && userLocation ? 0 : 260,
       maxZoom: 18.6,
       pitch: 0,
       bearing: 0,
     });
-  }, [route]);
+  }, [navigationActive, route, userLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -460,7 +490,14 @@ export function MapView({
       | maplibregl.GeoJSONSource
       | undefined;
     source?.setData(userLocationFeature(userLocation, accuracy));
-  }, [userLocation, accuracy]);
+
+    if (navigationActive && userLocation && followLocationRef.current) {
+      map.jumpTo({
+        center: userLocation,
+        zoom: Math.max(map.getZoom(), 18.2),
+      });
+    }
+  }, [accuracy, navigationActive, userLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -480,7 +517,7 @@ export function MapView({
     if (selected) {
       map.fitBounds(polygonBounds(selected), {
         padding: { top: 118, right: 42, bottom: 260, left: 42 },
-        duration: 680,
+        duration: 280,
         pitch: 0,
         bearing: 0,
       });
@@ -503,7 +540,7 @@ export function MapView({
       map.easeTo({
         center: selectedPlace.coordinates,
         zoom: Math.max(map.getZoom(), 18),
-        duration: 500,
+        duration: 260,
       });
     }
   }, [selectedPlace]);
@@ -515,17 +552,21 @@ export function MapView({
     }
 
     if (userLocation) {
+      if (navigationActive) {
+        followLocationRef.current = true;
+        setIsFollowingLocation(true);
+      }
       map.easeTo({
         center: userLocation,
         zoom: Math.max(map.getZoom(), 18),
-        duration: 450,
+        duration: 260,
       });
       return;
     }
 
     map.fitBounds(CAMPUS_BOUNDS, {
       padding: 72,
-      duration: 450,
+      duration: 260,
       pitch: 0,
       bearing: 0,
     });
@@ -537,12 +578,17 @@ export function MapView({
       return;
     }
 
+    if (navigationActive) {
+      followLocationRef.current = false;
+      setIsFollowingLocation(false);
+    }
+
     map.easeTo({
       center: selected ? polygonBounds(selected)[0] : CAMPUS_CENTER,
       zoom: selected ? Math.max(map.getZoom(), 18) : 17,
       bearing: 0,
       pitch: 0,
-      duration: 450,
+      duration: 260,
     });
   }
 
@@ -559,10 +605,19 @@ export function MapView({
         aria-label={t(language, "mapControls")}
       >
         <button
-          className="grid size-10 place-items-center rounded-none border-0 border-b border-ink/10 bg-transparent text-ink transition hover:bg-ink/[0.05] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fern/60 active:scale-95"
+          className={`grid size-10 place-items-center rounded-none border-0 border-b border-ink/10 transition focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fern/60 active:scale-95 ${navigationActive && isFollowingLocation ? "bg-ink text-paper" : "bg-transparent text-ink hover:bg-ink/[0.05]"}`}
           type="button"
           onClick={centerMap}
-          aria-label={t(language, "centerMap")}
+          aria-label={
+            navigationActive && !isFollowingLocation
+              ? t(language, "followLocation")
+              : t(language, "centerMap")
+          }
+          title={
+            navigationActive && !isFollowingLocation
+              ? t(language, "followLocation")
+              : t(language, "centerMap")
+          }
         >
           <LocateFixed aria-hidden="true" size={18} />
         </button>

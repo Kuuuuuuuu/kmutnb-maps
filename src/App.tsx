@@ -1,6 +1,5 @@
 import { Accessibility, Languages, MapPinned, X } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import buildingData from "./data/kmutnb-buildings.json";
 import { campusPlaces } from "./data/campus-places";
 import { BuildingSheet } from "./components/BuildingSheet";
@@ -15,12 +14,20 @@ import { SearchPanel } from "./components/SearchPanel";
 import { MAIN_GATE, polygonCenter } from "./lib/geo";
 import { localizedBuildingName, localizedPlaceName, t } from "./lib/i18n";
 import { getRoute } from "./lib/routing";
+import {
+  distanceBetween,
+  getRouteProgress,
+  type RouteProgress,
+} from "./lib/navigation";
 import { useUserLocation } from "./lib/useUserLocation";
+import { useGsapEntrance } from "./lib/gsap";
 import type {
   BuildingCollection,
   BuildingFeature,
   CampusPlace,
   Language,
+  LngLat,
+  NavigationPhase,
   RouteSummary,
   SearchResult,
 } from "./types/geo";
@@ -44,9 +51,20 @@ export function App() {
   const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "error">(
     "idle",
   );
+  const [routeProgress, setRouteProgress] = useState<RouteProgress | null>(
+    null,
+  );
+  const [navigationPhase, setNavigationPhase] =
+    useState<NavigationPhase>("active");
   const [issueOpen, setIssueOpen] = useState(false);
   const [issueSaved, setIssueSaved] = useState(false);
   const userLocation = useUserLocation();
+  const routeOriginRef = useRef<LngLat | null>(null);
+  const lastRouteRequestAtRef = useRef(0);
+  const routeRequestIdRef = useRef(0);
+  const rerouteInFlightRef = useRef(false);
+  const routeAbortControllerRef = useRef<AbortController | null>(null);
+  const headerRef = useGsapEntrance<HTMLElement>("fadeDown");
 
   const namedBuildings = useMemo(
     () =>
@@ -77,11 +95,15 @@ export function App() {
       ? localizedPlaceName(selectedPlace, language)
       : "Campus destination";
 
-  async function refreshRoute(target: RouteTarget) {
+  async function refreshRouteFrom(
+    target: RouteTarget,
+    origin: LngLat,
+    hasLiveLocation = Boolean(userLocation.position),
+    signal?: AbortSignal,
+  ) {
     const destination =
       "geometry" in target ? polygonCenter(target) : target.coordinates;
-    const origin = userLocation.position || MAIN_GATE;
-    const originLabel = userLocation.position
+    const originLabel = hasLiveLocation
       ? language === "th"
         ? "ตำแหน่งของคุณ"
         : "Your location"
@@ -89,21 +111,35 @@ export function App() {
         ? "ประตูหลัก"
         : "Main Gate";
 
-    return getRoute(origin, destination, originLabel);
+    return getRoute(origin, destination, originLabel, signal);
   }
 
   function startRoute(target: RouteTarget) {
+    routeAbortControllerRef.current?.abort();
     setRouteTarget(target);
     setRoute(null);
     setRouteSummary(null);
+    setRouteProgress(null);
+    setNavigationPhase("active");
     setRouteStatus("loading");
+    routeOriginRef.current = null;
+    lastRouteRequestAtRef.current = 0;
+    routeRequestIdRef.current += 1;
   }
 
   function cancelRoute() {
+    routeAbortControllerRef.current?.abort();
+    routeAbortControllerRef.current = null;
+    routeRequestIdRef.current += 1;
     setRouteTarget(null);
     setRoute(null);
     setRouteSummary(null);
+    setRouteProgress(null);
+    setNavigationPhase("active");
     setRouteStatus("idle");
+    routeOriginRef.current = null;
+    lastRouteRequestAtRef.current = 0;
+    rerouteInFlightRef.current = false;
   }
 
   useEffect(() => {
@@ -112,32 +148,148 @@ export function App() {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
+    const requestId = ++routeRequestIdRef.current;
+    const origin = userLocation.position || MAIN_GATE;
+    routeOriginRef.current = origin;
+    lastRouteRequestAtRef.current = Date.now();
+    routeAbortControllerRef.current = controller;
     setRouteStatus("loading");
 
-    refreshRoute(routeTarget)
+    refreshRouteFrom(routeTarget, origin, Boolean(userLocation.position), controller.signal)
       .then((result) => {
-        if (cancelled) {
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          requestId !== routeRequestIdRef.current
+        ) {
           return;
         }
 
         setRoute(result.route);
         setRouteSummary(result.summary);
+        setRouteProgress(
+          userLocation.position
+            ? getRouteProgress(
+                result.route,
+                result.summary,
+                userLocation.position,
+              )
+            : null,
+        );
+        setNavigationPhase("active");
         setRouteStatus("idle");
       })
       .catch(() => {
-        if (cancelled) {
+        if (
+          cancelled ||
+          controller.signal.aborted ||
+          requestId !== routeRequestIdRef.current
+        ) {
           return;
         }
 
         setRoute(null);
         setRouteSummary(null);
+        setRouteProgress(null);
         setRouteStatus("error");
+      })
+      .finally(() => {
+        if (routeAbortControllerRef.current === controller) {
+          routeAbortControllerRef.current = null;
+        }
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
+      if (routeAbortControllerRef.current === controller) {
+        routeAbortControllerRef.current = null;
+      }
     };
-  }, [language, routeTarget, userLocation.position]);
+  }, [language, routeTarget]);
+
+  useEffect(() => {
+    if (!routeTarget || !route || !routeSummary || !userLocation.position) {
+      return;
+    }
+
+    const position = userLocation.position;
+    const progress = getRouteProgress(route, routeSummary, position);
+    setRouteProgress(progress);
+
+    if (progress.isArrived) {
+      setNavigationPhase("arrived");
+      return;
+    }
+
+    const accuracyBuffer = Math.max(35, (userLocation.accuracy || 0) * 1.35);
+    const isOffRoute = progress.distanceToRouteMeters > accuracyBuffer;
+    if (isOffRoute) {
+      setNavigationPhase("off-route");
+    } else if (navigationPhase === "off-route") {
+      setNavigationPhase("active");
+    }
+
+    const routeOrigin = routeOriginRef.current || position;
+    const movedSinceRouteStart = distanceBetween(routeOrigin, position);
+    const cooldownComplete =
+      Date.now() - lastRouteRequestAtRef.current >= 12000;
+    const needsReroute = movedSinceRouteStart >= 80 || isOffRoute;
+
+    if (!needsReroute || !cooldownComplete || rerouteInFlightRef.current) {
+      return;
+    }
+
+    rerouteInFlightRef.current = true;
+    lastRouteRequestAtRef.current = Date.now();
+    const requestId = ++routeRequestIdRef.current;
+    const controller = new AbortController();
+    routeAbortControllerRef.current = controller;
+    setNavigationPhase(isOffRoute ? "off-route" : "recalculating");
+    setRouteStatus("loading");
+
+    refreshRouteFrom(routeTarget, position, true, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted || requestId !== routeRequestIdRef.current) {
+          return;
+        }
+
+        routeOriginRef.current = position;
+        setRoute(result.route);
+        setRouteSummary(result.summary);
+        const updatedProgress = getRouteProgress(
+          result.route,
+          result.summary,
+          position,
+        );
+        setRouteProgress(updatedProgress);
+        setNavigationPhase(updatedProgress.isArrived ? "arrived" : "active");
+        setRouteStatus("idle");
+      })
+      .catch(() => {
+        if (
+          !controller.signal.aborted &&
+          requestId === routeRequestIdRef.current
+        ) {
+          setRouteStatus("idle");
+          setNavigationPhase(isOffRoute ? "off-route" : "active");
+        }
+      })
+      .finally(() => {
+        rerouteInFlightRef.current = false;
+        if (routeAbortControllerRef.current === controller) {
+          routeAbortControllerRef.current = null;
+        }
+      });
+  }, [
+    navigationPhase,
+    route,
+    routeSummary,
+    routeTarget,
+    userLocation.accuracy,
+    userLocation.position,
+  ]);
 
   function clearSelection() {
     setSelected(null);
@@ -214,14 +366,13 @@ export function App() {
         colorBlindMode={colorBlindMode}
         userLocation={userLocation.position}
         accuracy={userLocation.accuracy}
+        navigationActive={isNavigating}
         onSelectBuilding={handleSelectBuilding}
         onSelectPlace={handleSelectPlace}
       />
 
-      <motion.header
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      <header
+        ref={headerRef}
         className="pointer-events-none absolute left-3 right-3 top-[max(0.875rem,env(safe-area-inset-top))] z-20 hidden items-start justify-between gap-3 md:flex md:left-6 md:right-6 md:top-[max(1.125rem,env(safe-area-inset-top))]"
         aria-label={t(language, "directory")}
       >
@@ -238,7 +389,7 @@ export function App() {
             </h1>
           </div>
         </div>
-      </motion.header>
+      </header>
 
       <div className="absolute right-3 top-[max(0.875rem,env(safe-area-inset-top))] z-30 flex items-center gap-1.5 md:right-6 md:top-[max(1.125rem,env(safe-area-inset-top))]">
         <div
@@ -290,7 +441,7 @@ export function App() {
         onSelect={handleSearchResult}
       />
 
-      <AnimatePresence initial={false}>
+      <>
         {selected && !isNavigating && (
           <BuildingSheet
             key={`building-${selected.properties.osm_id}`}
@@ -318,20 +469,17 @@ export function App() {
             onReportIssue={() => setIssueOpen(true)}
           />
         )}
-      </AnimatePresence>
+      </>
 
-      <AnimatePresence initial={false}>
+      <>
         {!routeTarget && routeStatus === "error" && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.96 }}
+          <GsapToast
             className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 right-3 z-40 flex min-h-11 items-center gap-2 rounded-xl border border-coral/20 bg-paper px-3.5 py-2.5 text-[0.8rem] font-bold text-coral shadow-soft md:bottom-5 md:left-1/2 md:right-auto md:w-max md:-translate-x-1/2"
             role="status"
           >
             <X aria-hidden="true" size={16} />
             <span>{t(language, "routeUnavailable")}</span>
-          </motion.div>
+          </GsapToast>
         )}
 
         {isNavigating && routeSummary && routeTarget && (
@@ -340,25 +488,28 @@ export function App() {
             destinationName={destinationName}
             language={language}
             routeSummary={routeSummary}
-            arrivalTime={formatArrivalTime(routeSummary.durationSeconds)}
+            routeProgress={routeProgress}
+            navigationPhase={navigationPhase}
+            locationStatus={userLocation.status}
+            arrivalTime={formatArrivalTime(
+              routeProgress?.remainingDurationSeconds ??
+                routeSummary.durationSeconds,
+            )}
             onExit={cancelRoute}
           />
         )}
 
         {issueSaved && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
+          <GsapToast
             className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 right-3 z-50 rounded-xl border border-fern/20 bg-paper px-4 py-3 text-center text-[0.8rem] font-extrabold text-fern shadow-soft md:left-1/2 md:right-auto md:w-max md:-translate-x-1/2"
             role="status"
           >
             {t(language, "issueSaved")}
-          </motion.div>
+          </GsapToast>
         )}
-      </AnimatePresence>
+      </>
 
-      <AnimatePresence>
+      <>
         {issueOpen && (
           <IssueReportDialog
             language={language}
@@ -368,13 +519,31 @@ export function App() {
             onSubmit={handleIssueSubmit}
           />
         )}
-      </AnimatePresence>
+      </>
     </main>
   );
 }
 
 function targetKey(target: RouteTarget): string {
   return "geometry" in target ? String(target.properties.osm_id) : target.id;
+}
+
+function GsapToast({
+  children,
+  className,
+  role,
+}: {
+  children: ReactNode;
+  className: string;
+  role: "status";
+}) {
+  const toastRef = useGsapEntrance<HTMLDivElement>("toast");
+
+  return (
+    <div ref={toastRef} className={className} role={role}>
+      {children}
+    </div>
+  );
 }
 
 function readStoredLanguage(): Language {

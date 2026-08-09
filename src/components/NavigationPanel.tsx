@@ -1,17 +1,36 @@
-import { ArrowUp, CornerUpLeft, CornerUpRight, Flag, X } from "lucide-react";
-import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  ArrowUp,
+  CheckCircle2,
+  CornerUpLeft,
+  CornerUpRight,
+  Flag,
+  LocateFixed,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import {
   formatDistance,
   formatDuration,
   formatRouteInstruction,
 } from "../lib/geo";
 import { t } from "../lib/i18n";
-import type { Language, RouteStep, RouteSummary } from "../types/geo";
+import type {
+  Language,
+  NavigationPhase,
+  RouteStep,
+  RouteSummary,
+} from "../types/geo";
+import type { RouteProgress } from "../lib/navigation";
+import { useGsapEntrance } from "../lib/gsap";
 
 type NavigationPanelProps = {
   destinationName: string;
   language: Language;
   routeSummary: RouteSummary;
+  routeProgress: RouteProgress | null;
+  navigationPhase: NavigationPhase;
+  locationStatus: "idle" | "watching" | "denied" | "unavailable";
   arrivalTime: string;
   onExit: () => void;
 };
@@ -20,19 +39,30 @@ export function NavigationPanel({
   destinationName,
   language,
   routeSummary,
+  routeProgress,
+  navigationPhase,
+  locationStatus,
   arrivalTime,
   onExit,
 }: NavigationPanelProps) {
-  const nextStep = routeSummary.steps.find((step) => step.type !== "depart");
+  const nextStep =
+    routeProgress?.nextStep ||
+    routeSummary.steps.find((step) => step.type !== "depart");
   const instruction = formatRouteInstruction(nextStep || routeSummary.steps[0]);
+  const status = navigationStatus(language, navigationPhase, locationStatus);
+  const remainingDistance =
+    routeProgress?.remainingDistanceMeters ?? routeSummary.distanceMeters;
+  const remainingDuration =
+    routeProgress?.remainingDurationSeconds ?? routeSummary.durationSeconds;
+  const nextStepDistance =
+    routeProgress?.nextStepDistanceMeters ?? nextStep?.distanceMeters;
+  const nextInstructionRef = useGsapEntrance<HTMLElement>("navTop");
+  const navigationSummaryRef = useGsapEntrance<HTMLElement>("navBottom");
 
   return (
     <>
-      <motion.aside
-        initial={{ opacity: 0, y: -14, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10, scale: 0.97 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      <aside
+        ref={nextInstructionRef}
         className="absolute left-3 right-16 top-[max(5.25rem,env(safe-area-inset-top)+4rem)] z-40 md:left-6 md:right-auto md:top-[max(5.4rem,env(safe-area-inset-top)+3.5rem)] md:w-[min(23rem,calc(100vw-3rem))]"
         aria-label={t(language, "nextInstruction")}
       >
@@ -41,26 +71,26 @@ export function NavigationPanel({
             <ManeuverIcon step={nextStep} />
           </div>
           <div className="min-w-0">
-            <span className="block text-[0.58rem] font-extrabold uppercase tracking-[0.16em] text-white/[0.58]">
-              {t(language, "nextInstruction")}
-            </span>
+            <div className="flex items-center gap-1.5 text-[0.58rem] font-extrabold uppercase tracking-[0.16em] text-white/[0.58]">
+              {status.icon}
+              <span>{status.label}</span>
+            </div>
             <strong className="mt-1 block truncate text-[0.98rem] leading-tight text-[#f5fff2]">
-              {instruction}
+              {navigationPhase === "arrived"
+                ? t(language, "arrived")
+                : instruction}
             </strong>
-            {nextStep && (
+            {nextStep && navigationPhase !== "arrived" && (
               <span className="mt-1 block text-[0.72rem] font-semibold text-white/[0.68]">
-                {formatDistance(nextStep.distanceMeters)}
+                {formatDistance(nextStepDistance || nextStep.distanceMeters)}
               </span>
             )}
           </div>
         </div>
-      </motion.aside>
+      </aside>
 
-      <motion.aside
-        initial={{ opacity: 0, y: 18, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12, scale: 0.97 }}
-        transition={{ duration: 0.35, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
+      <aside
+        ref={navigationSummaryRef}
         className="absolute bottom-[max(0.75rem,env(safe-area-inset-bottom)+0.875rem)] left-2.5 right-2.5 z-40 rounded-[1.15rem] border border-ink/10 bg-paper p-3 shadow-float md:bottom-6 md:left-6 md:right-auto md:w-[min(28rem,calc(100vw-3rem))]"
         aria-label={t(language, "navigatingTo")}
       >
@@ -89,14 +119,14 @@ export function NavigationPanel({
           <RouteStat label={t(language, "eta")} value={arrivalTime} />
           <RouteStat
             label={t(language, "time")}
-            value={formatDuration(routeSummary.durationSeconds)}
+            value={formatDuration(remainingDuration)}
           />
           <RouteStat
             label={t(language, "distance")}
-            value={formatDistance(routeSummary.distanceMeters)}
+            value={formatDistance(remainingDistance)}
           />
         </div>
-      </motion.aside>
+      </aside>
     </>
   );
 }
@@ -128,4 +158,43 @@ function ManeuverIcon({ step }: { step?: RouteStep }) {
   }
 
   return <ArrowUp aria-hidden="true" size={24} strokeWidth={2.5} />;
+}
+
+function navigationStatus(
+  language: Language,
+  phase: NavigationPhase,
+  locationStatus: "idle" | "watching" | "denied" | "unavailable",
+) {
+  if (phase === "arrived") {
+    return {
+      label: t(language, "arrived"),
+      icon: <CheckCircle2 aria-hidden="true" size={13} />,
+    };
+  }
+
+  if (phase === "off-route") {
+    return {
+      label: t(language, "offRoute"),
+      icon: <AlertTriangle aria-hidden="true" size={13} />,
+    };
+  }
+
+  if (phase === "recalculating") {
+    return {
+      label: t(language, "recalculatingRoute"),
+      icon: <RefreshCw aria-hidden="true" size={13} />,
+    };
+  }
+
+  if (locationStatus !== "watching") {
+    return {
+      label: t(language, "gpsWaiting"),
+      icon: <LocateFixed aria-hidden="true" size={13} />,
+    };
+  }
+
+  return {
+    label: t(language, "nextInstruction"),
+    icon: <LocateFixed aria-hidden="true" size={13} />,
+  };
 }

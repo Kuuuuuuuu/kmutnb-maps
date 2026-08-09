@@ -5,8 +5,8 @@ import {
   Navigation,
   X,
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { localizedPlaceDescription, localizedPlaceName, t } from "../lib/i18n";
+import { useGsapEntrance } from "../lib/gsap";
 import type { CampusPlace, Language } from "../types/geo";
 
 type PlaceSheetProps = {
@@ -31,13 +31,11 @@ export function PlaceSheet({
   onReportIssue,
 }: PlaceSheetProps) {
   const categoryLabel = t(language, place.category);
+  const sheetRef = useGsapEntrance<HTMLElement>("sheetUp");
 
   return (
-    <motion.aside
-      initial={{ opacity: 0, y: 22, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 18, scale: 0.98 }}
-      transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+    <aside
+      ref={sheetRef}
       className="absolute bottom-[max(0.625rem,env(safe-area-inset-bottom))] left-2.5 right-2.5 z-40 rounded-[1.15rem] border border-ink/10 bg-paper p-4 shadow-float md:bottom-6 md:left-auto md:right-6 md:w-[min(23rem,calc(100vw-3rem))]"
       aria-label={categoryLabel}
     >
@@ -112,6 +110,6 @@ export function PlaceSheet({
           <AlertTriangle aria-hidden="true" size={18} />
         </button>
       </div>
-    </motion.aside>
+    </aside>
   );
 }
