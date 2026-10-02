@@ -1,0 +1,90 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family:
+      "IBM Plex Sans Thai", "IBM Plex Sans", Aptos, "Segoe UI", sans-serif;
+    color: #17231c;
+    background: #f7f5ef;
+    font-synthesis: none;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+    --map-line: rgba(23, 35, 28, 0.12);
+  }
+
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #app {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    overflow: hidden;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .maplibregl-ctrl-bottom-right {
+    bottom: 10px;
+  }
+
+  .maplibregl-ctrl-group {
+    overflow: hidden;
+    border-radius: 10px !important;
+    border: 1px solid rgba(23, 35, 28, 0.1) !important;
+    box-shadow: 0 10px 24px rgba(27, 35, 31, 0.1) !important;
+  }
+
+  .maplibregl-ctrl-group button {
+    background: #f7f5ef !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .maplibregl-ctrl-bottom-right {
+    bottom: 92px;
+  }
+}
+
+/* iOS Safari zooms the whole page into any field under 16px when it's
+   focused and never zooms back out — tapping search or signing in left the
+   page stuck zoomed. !important so it beats the text-[…] utilities. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
